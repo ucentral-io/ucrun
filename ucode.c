@@ -85,23 +85,24 @@ uc_uloop_timeout_cb(struct uloop_timeout *t)
 	struct urun_timeout *timeout = container_of(t, struct urun_timeout, timeout);
 	uc_value_t *retval = NULL;
 
-	/* push the function to the stack and execute it */
-	ucv_get(timeout->function);
-	uc_vm_stack_push(&timeout->urun->vm, timeout->function);
-	if (!uc_vm_call(&timeout->urun->vm, false, 0))
-		retval = uc_vm_stack_pop(&timeout->urun->vm);
-fprintf(stderr, "%s:%s[%d]\n", __FILE__, __func__, __LINE__);
+	/* push the function to the stack */
+	uc_vm_stack_push(&timeout->urun->vm, ucv_get(timeout->function));
 
-	/* this returns 10 instead of 500 */
-	if (retval && ucv_type(retval) == UC_INTEGER)
-		fprintf(stderr, "%s:%s[%d]%ld\n", __FILE__, __func__, __LINE__, ucv_int64_get(retval));
+	/* invoke function with zero arguments */
+	if (uc_vm_call(&timeout->urun->vm, false, 0)) {
+		/* function raised an exception, bail out */
+		goto out;
+	}
+
+	retval = uc_vm_stack_pop(&timeout->urun->vm);
 
 	/* if the callback returned an integer, restart the timer */
-	if (0 && retval && ucv_type(retval) == UC_INTEGER) {
+	if (ucv_type(retval) == UC_INTEGER) {
 		uloop_timeout_set(&timeout->timeout, ucv_int64_get(retval));
 		return;
 	}
 
+out:
 	/* free the timer context */
 	ucv_put(timeout->function);
 	free(timeout);
