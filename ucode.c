@@ -23,8 +23,7 @@ ucode_run(struct urun *urun)
 	case STATUS_OK:
 		exit_code = 0;
 
-		char *s = ucv_to_string(&urun->vm, last_expression_result);
-
+		//char *s = ucv_to_string(&urun->vm, last_expression_result);
 		//printf("Program finished successfully.\n");
 		//printf("Function return value is %s\n", s);
 		break;
