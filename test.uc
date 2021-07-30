@@ -12,11 +12,18 @@
 		}
 	};
 
+	local n_runs = 0;
+
 	function timeout() {
-		printf("timeout\n");
+		printf("timeout[%d]: %d\n", n_runs, time());
+
+		if (++n_runs >= 3) {
+			printf("not scheduling new timeout\n");
+			return false;
+		}
 
 		return 5000;
 	}
 
-//	uloop_timeout(timeout, 1000);
+	uloop_timeout(timeout, 1000);
 %}
