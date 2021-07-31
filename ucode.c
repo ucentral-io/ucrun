@@ -318,6 +318,18 @@ void
 ucode_deinit(struct ucrun *ucrun)
 {
 	struct ucrun_timeout *timeout, *p;
+	uc_value_t *stop;
+
+	/* tell the user code that we are shutting down */
+	stop = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "stop", NULL);
+	if (ucv_is_callable(stop)) {
+		/* push the stop function to the stack */
+		uc_vm_stack_push(&ucrun->vm, ucv_get(stop));
+
+		/* execute the stop function */
+		if (!uc_vm_call(&ucrun->vm, false, 0))
+			uc_vm_stack_pop(&ucrun->vm);
+	}
 
 	/* start by killing all pending timers */
 	list_for_each_entry_safe(timeout, p, &ucrun->timeout, list)

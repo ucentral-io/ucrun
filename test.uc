@@ -45,4 +45,8 @@ global.start = function() {
 	ulog_err("err\n");
 
 	uloop_timeout(timeout, 1000, { private: "data" });
-}
+};
+
+global.stop = function() {
+	ulog_info("stopping\n");
+};
