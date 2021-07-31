@@ -228,5 +228,10 @@ ubus_deinit(struct ucrun *ucrun)
 	if (!ucrun->ubus)
 		return;
 
-        ubus_auto_shutdown(&ucrun->ubus_auto_conn);
+        /* disconnect from ubus and free the memory */
+	ubus_auto_shutdown(&ucrun->ubus_auto_conn);
+
+	blob_buf_free(&u);
+	free(ucrun->ubus_name);
+	free(ucrun->ubus_method);
 }

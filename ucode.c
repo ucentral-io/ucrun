@@ -304,6 +304,9 @@ ucode_deinit(struct ucrun *ucrun)
 	list_for_each_entry_safe(timeout, p, &ucrun->timeout, list)
 		uc_uloop_timeout_free(timeout);
 
+	/* disconnect from ubus */
+	ubus_deinit(ucrun);
+
 	/* free VM context */
 	uc_vm_free(&ucrun->vm);
 }
