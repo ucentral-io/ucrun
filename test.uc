@@ -15,7 +15,7 @@ function timeout(priv) {
 
 global.ulog = {
 	identity: "ucrun",
-	channels: [ "stdio", "dmesg" ],
+	channels: [ "stdio", "syslog" ],
 };
 
 global.ubus = {
