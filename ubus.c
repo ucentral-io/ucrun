@@ -134,9 +134,13 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	else
 		fprintf(stderr, "Failed to invoke ubus cb\n");
 
-	if (retval) {
+	if (ucv_type(retval) == UC_OBJECT) {
+		json_object *o;
+
 		blob_buf_init(&u, 0);
-		blobmsg_add_json_from_string(&u, ucv_to_string(&ucrun->vm, retval));
+		o = ucv_to_json(retval);
+		blobmsg_add_object(&u, o);
+		json_object_put(o);
 
 		/* check if we need to send a reply */
 		if (blobmsg_len(u.head))
