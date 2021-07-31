@@ -108,6 +108,7 @@ out:
 	/* free the timer context */
 	ucv_put(timeout->function);
 	ucv_put(timeout->priv);
+	list_del(&timeout->list);
 	free(timeout);
 }
 
@@ -133,6 +134,9 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 	if (priv)
 		timeout->priv = ucv_get(priv);
 	uloop_timeout_set(&timeout->timeout, ucv_int64_get(expire));
+
+	/* track the timer in our context */
+	list_add(&timeout->list, &vm_to_ucrun(vm)->timeout);
 
 	return ucv_int64_new(0);
 }
@@ -229,6 +233,9 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 {
 	uc_value_t *ARGV, *start;
 	int i;
+
+	/* setup the ucrun context */
+	INIT_LIST_HEAD(&ucrun->timeout);
 
 	/* initialize VM context */
 	uc_vm_init(&ucrun->vm, &config);
