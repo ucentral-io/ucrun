@@ -5,6 +5,7 @@
 #include <libubus.h>
 #include <libubox/blobmsg_json.h>
 #include <libubox/uloop.h>
+#include <libubox/ulog.h>
 
 struct ucrun {
 	struct list_head timeout;

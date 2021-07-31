@@ -1,5 +1,10 @@
 #!./ucrun
 
+global.ulog = {
+	identity: "ucrun",
+	channels: [ "stdio", "dmesg" ],
+};
+
 global.ubus = {
 	object: "ucrun",
 
@@ -30,6 +35,11 @@ function timeout() {
 
 	return 5000;
 }
+
+ulog_info("info\n");
+ulog_note("note\n");
+ulog_warn("warn\n");
+ulog_err("err\n");
 
 printf("%s\n", ARGV);
 

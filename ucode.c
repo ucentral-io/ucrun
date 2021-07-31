@@ -144,6 +144,81 @@ ucode_init_ubus(struct ucrun *ucrun)
 	ubus_init(ucrun);
 }
 
+static uc_value_t *
+uc_ulog(uc_vm_t *vm, size_t nargs, int severity)
+{
+	uc_value_t *message = uc_fn_arg(0);
+	char *string;
+
+	if (!message)
+		return ucv_int64_new(-1);
+
+	string = ucv_to_string(vm, message);
+	ulog(severity, "%s", string);
+	free(string);
+
+	return ucv_int64_new(0);
+}
+
+static uc_value_t *
+uc_ulog_info(uc_vm_t *vm, size_t nargs)
+{
+	return uc_ulog(vm, nargs, LOG_INFO);
+}
+
+static uc_value_t *
+uc_ulog_note(uc_vm_t *vm, size_t nargs)
+{
+	return uc_ulog(vm, nargs, LOG_NOTICE);
+}
+
+static uc_value_t *
+uc_ulog_warn(uc_vm_t *vm, size_t nargs)
+{
+	return uc_ulog(vm, nargs, LOG_WARNING);
+}
+
+static uc_value_t *
+uc_ulog_err(uc_vm_t *vm, size_t nargs)
+{
+	return uc_ulog(vm, nargs, LOG_ERR);
+}
+
+static void
+ucode_init_ulog(struct ucrun *ucrun)
+{
+	uc_value_t *ulog = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "ulog", NULL);
+	uc_value_t *identity, *channels;
+	int flags = 0;
+
+	/* make sure the declartion is complete */
+	if (ucv_type(ulog) != UC_OBJECT)
+		return;
+
+	identity = ucv_object_get(ulog, "identity", NULL);
+	channels = ucv_object_get(ulog, "channels", NULL);
+
+	if (ucv_type(identity) != UC_STRING || ucv_type(channels) != UC_ARRAY)
+		return;
+
+	/* figure out which channels were requested */
+	ucv_object_foreach(channels, key, val) {
+		char *v;
+
+		if (ucv_type(val) != UC_STRING)
+			continue;
+
+		v = ucv_string_get(val);
+		if (!strcmp(v, "syslog"))
+			flags |= ULOG_SYSLOG;
+		if (!strcmp(v, "stdio"))
+			flags |= ULOG_STDIO;
+	}
+
+	/* open the log */
+	ulog_open(flags, LOG_DAEMON, ucv_string_get(identity));
+}
+
 int
 ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 {
@@ -162,7 +237,13 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 
 	/* load standard library into global VM scope */
 	uc_stdlib_load(uc_vm_scope_get(&ucrun->vm));
+
+	/* load native functions into the vm */
 	uc_function_register(uc_vm_scope_get(&ucrun->vm), "uloop_timeout", uc_uloop_timeout);
+	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_info", uc_ulog_info);
+	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_note", uc_ulog_note);
+	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_warn", uc_ulog_warn);
+	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_err", uc_ulog_err);
 
 	/* add commandline parameters */
 	ARGV = ucv_array_new(&ucrun->vm);
@@ -174,6 +255,9 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 
 	/* load our user code */
 	ucode_run(ucrun);
+
+	/* enable ulog if requested */
+	ucode_init_ulog(ucrun);
 
 	/* spawn ubus if requested */
 	ucode_init_ubus(ucrun);
