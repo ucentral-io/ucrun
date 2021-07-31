@@ -1,14 +1,114 @@
-#include "urun.h"
+/*
+ * Copyright (C) 2021 Jo-Philipp Wich <jo@mein.io>
+ * Copyright (C) 2021 John Crispin <john@phrozen.org>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include "ucrun.h"
 
 static struct blob_buf u;
 
-struct urun *
-ctx_to_urun(struct ubus_context *ctx)
+struct ucrun *
+ctx_to_ucrun(struct ubus_context *ctx)
 {
 	struct ubus_auto_conn *conn = container_of(ctx, struct ubus_auto_conn, ctx);
-	struct urun *urun = container_of(conn, struct urun, ubus_auto_conn);
+	struct ucrun *ucrun = container_of(conn, struct ucrun, ubus_auto_conn);
 
-	return urun;
+	return ucrun;
+}
+
+static uc_value_t *
+uc_blob_to_json(uc_vm_t *vm, struct blob_attr *attr, bool table, const char **name);
+
+static uc_value_t *
+uc_blob_array_to_json(uc_vm_t *vm, struct blob_attr *attr, size_t len, bool table)
+{
+	uc_value_t *o = table ? ucv_object_new(vm) : ucv_array_new(vm);
+	uc_value_t *v;
+	struct blob_attr *pos;
+	size_t rem = len;
+	const char *name;
+
+	if (!o)
+		return NULL;
+
+	__blob_for_each_attr(pos, attr, rem) {
+		name = NULL;
+		v = uc_blob_to_json(vm, pos, table, &name);
+
+		if (table && name)
+			ucv_object_add(o, name, v);
+		else if (!table)
+			ucv_array_push(o, v);
+		else
+			ucv_put(v);
+	}
+
+	return o;
+}
+
+static uc_value_t *
+uc_blob_to_json(uc_vm_t *vm, struct blob_attr *attr, bool table, const char **name)
+{
+	void *data;
+	int len;
+
+	if (!blobmsg_check_attr(attr, false))
+		return NULL;
+
+	if (table && blobmsg_name(attr)[0])
+		*name = blobmsg_name(attr);
+
+	data = blobmsg_data(attr);
+	len = blobmsg_data_len(attr);
+
+	switch (blob_id(attr)) {
+	case BLOBMSG_TYPE_BOOL:
+		return ucv_boolean_new(*(uint8_t *)data);
+
+	case BLOBMSG_TYPE_INT16:
+		return ucv_int64_new((int64_t)be16_to_cpu(*(uint16_t *)data));
+
+	case BLOBMSG_TYPE_INT32:
+		return ucv_int64_new((int64_t)be32_to_cpu(*(uint32_t *)data));
+
+	case BLOBMSG_TYPE_INT64:
+		return ucv_uint64_new(be64_to_cpu(*(uint64_t *)data));
+
+	case BLOBMSG_TYPE_DOUBLE:
+		;
+		union {
+			double d;
+			uint64_t u64;
+		} v;
+
+		v.u64 = be64_to_cpu(*(uint64_t *)data);
+
+		return ucv_double_new(v.d);
+
+	case BLOBMSG_TYPE_STRING:
+		return ucv_string_new(data);
+
+	case BLOBMSG_TYPE_ARRAY:
+		return uc_blob_array_to_json(vm, data, len, false);
+
+	case BLOBMSG_TYPE_TABLE:
+		return uc_blob_array_to_json(vm, data, len, true);
+
+	default:
+		return NULL;
+	}
 }
 
 static int
@@ -18,11 +118,10 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	      const char *name,
 	      struct blob_attr *msg)
 {
-	struct urun *urun = ctx_to_urun(ctx);
-	char *json = NULL;
+	struct ucrun *ucrun = ctx_to_ucrun(ctx);
 
 	/* try to find the method */
-	uc_value_t *methods = ucv_object_get(urun->ubus, "methods", NULL);
+	uc_value_t *methods = ucv_object_get(ucrun->ubus, "methods", NULL);
 	uc_value_t *method = NULL, *cb, *retval = NULL;
 
 	ucv_object_foreach(methods, key, val) {
@@ -34,10 +133,6 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	if (!method)
 		return UBUS_STATUS_METHOD_NOT_FOUND;
 
-	/* check if we want to pass anything into the function */
-	if (msg)
-		json = blobmsg_format_json(msg, true);
-
 	/* check if the callback is valid */
 	cb = ucv_object_get(method, "cb", NULL);
 	if (!ucv_is_callable(cb))
@@ -45,27 +140,29 @@ ubus_ucode_cb(struct ubus_context *ctx,
 
 	/* push the callback to the stack */
 	ucv_get(cb);
-	uc_vm_stack_push(&urun->vm, cb);
-	if (json)
-		uc_vm_stack_push(&urun->vm, ucv_string_new(json));
+	uc_vm_stack_push(&ucrun->vm, cb);
+	if (msg)
+		uc_vm_stack_push(&ucrun->vm,
+				 uc_blob_array_to_json(&ucrun->vm, blob_data(msg), blob_len(msg), true));
 
 	/* execute the callback */
-	if (!uc_vm_call(&urun->vm, false, json ? 1 : 0))
-		retval = uc_vm_stack_pop(&urun->vm);
-	else
-		fprintf(stderr, "Failed to invoke ubus cb\n");
+	if (!uc_vm_call(&ucrun->vm, false, msg ? 1 : 0))
+		retval = uc_vm_stack_pop(&ucrun->vm);
 
-	if (ucv_type(retval) == UC_STRING) {
+	if (ucv_type(retval) == UC_OBJECT) {
+		json_object *o;
+
 		blob_buf_init(&u, 0);
-		blobmsg_add_json_from_string(&u, ucv_string_get(retval));
+		o = ucv_to_json(retval);
+		blobmsg_add_object(&u, o);
+		json_object_put(o);
 
 		/* check if we need to send a reply */
 		if (blobmsg_len(u.head))
 			ubus_send_reply(ctx, req, u.head);
 	}
 
-	if (json)
-		free(json);
+	ucv_put(retval);
 
 	return UBUS_STATUS_OK;
 }
@@ -73,21 +170,37 @@ ubus_ucode_cb(struct ubus_context *ctx,
 static void
 ubus_connect_handler(struct ubus_context *ctx)
 {
-	struct urun *urun = ctx_to_urun(ctx);
+	struct ucrun *ucrun = ctx_to_ucrun(ctx);
+	uc_value_t *connect, *retval = NULL;
 
-	ubus_add_object(ctx, &urun->ubus_object);
+	/* register the ubus object */
+	ubus_add_object(ctx, &ucrun->ubus_object);
+
+	/* check if the user code has a connect handler */
+	connect = ucv_object_get(ucrun->ubus, "connect", NULL);
+	if (!ucv_is_callable(connect))
+		return;
+
+	/* push the callback to the stack */
+	ucv_get(connect);
+	uc_vm_stack_push(&ucrun->vm, connect);
+
+	/* execute the callback */
+	if (!uc_vm_call(&ucrun->vm, false, 0))
+		retval = uc_vm_stack_pop(&ucrun->vm);
+	ucv_put(retval);
 }
 
 void
-ubus_init(struct urun *urun)
+ubus_init(struct ucrun *ucrun)
 {
 	int n_methods, n = 0;
 
 	/* validate that the ubus declaration is complete */
-	uc_value_t *object = ucv_object_get(urun->ubus, "object", NULL);
-	uc_value_t *methods = ucv_object_get(urun->ubus, "methods", NULL);
+	uc_value_t *object = ucv_object_get(ucrun->ubus, "object", NULL);
+	uc_value_t *methods = ucv_object_get(ucrun->ubus, "methods", NULL);
 
-	ucv_get(urun->ubus);
+	ucv_get(ucrun->ubus);
 
 	if (ucv_type(object) != UC_STRING || ucv_type(methods) != UC_OBJECT) {
 		fprintf(stderr, "The ubus declaration is incomplete\n");
@@ -96,42 +209,47 @@ ubus_init(struct urun *urun)
 
 	/* create our ubus methods */
 	n_methods = ucv_object_length(methods);
-	urun->ubus_method = malloc(n_methods * sizeof(struct ubus_method));
-	memset(urun->ubus_method, 0, n_methods * sizeof(struct ubus_method));
+	ucrun->ubus_method = malloc(n_methods * sizeof(struct ubus_method));
+	memset(ucrun->ubus_method, 0, n_methods * sizeof(struct ubus_method));
 
 	n_methods = 0;
 	ucv_object_foreach(methods, key, val) {
 		if (!ucv_object_get(val, "cb", NULL))
 			continue;
 
-		urun->ubus_method[n].name = key;
-		urun->ubus_method[n].handler = ubus_ucode_cb;
+		ucrun->ubus_method[n].name = key;
+		ucrun->ubus_method[n].handler = ubus_ucode_cb;
 		n_methods++;
 	}
 
 	/* setup the ubus object */
-	urun->ubus_name = strdup(ucv_string_get(object));
+	ucrun->ubus_name = strdup(ucv_string_get(object));
 
-	urun->ubus_object_type.name = urun->ubus_name;
-	urun->ubus_object_type.methods = urun->ubus_method;
-	urun->ubus_object_type.n_methods = n_methods;
+	ucrun->ubus_object_type.name = ucrun->ubus_name;
+	ucrun->ubus_object_type.methods = ucrun->ubus_method;
+	ucrun->ubus_object_type.n_methods = n_methods;
 
-	urun->ubus_object.name = urun->ubus_name;
-	urun->ubus_object.type = &urun->ubus_object_type;
-	urun->ubus_object.methods = urun->ubus_method;
-	urun->ubus_object.n_methods = n_methods;
+	ucrun->ubus_object.name = ucrun->ubus_name;
+	ucrun->ubus_object.type = &ucrun->ubus_object_type;
+	ucrun->ubus_object.methods = ucrun->ubus_method;
+	ucrun->ubus_object.n_methods = n_methods;
 
 	/* try to connect to ubus */
-	memset(&urun->ubus_auto_conn, 0, sizeof(urun->ubus_auto_conn));
-	urun->ubus_auto_conn.cb = ubus_connect_handler;
-        ubus_auto_connect(&urun->ubus_auto_conn);
+	memset(&ucrun->ubus_auto_conn, 0, sizeof(ucrun->ubus_auto_conn));
+	ucrun->ubus_auto_conn.cb = ubus_connect_handler;
+        ubus_auto_connect(&ucrun->ubus_auto_conn);
 }
 
 void
-ubus_deinit(struct urun *urun)
+ubus_deinit(struct ucrun *ucrun)
 {
-	if (!urun->ubus)
+	if (!ucrun->ubus)
 		return;
 
-        ubus_auto_shutdown(&urun->ubus_auto_conn);
+        /* disconnect from ubus and free the memory */
+	ubus_auto_shutdown(&ucrun->ubus_auto_conn);
+
+	blob_buf_free(&u);
+	free(ucrun->ubus_name);
+	free(ucrun->ubus_method);
 }
