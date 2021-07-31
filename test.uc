@@ -1,3 +1,4 @@
+#!./ucrun
 {%
 	global.ubus = {
 		object: "ucrun",
