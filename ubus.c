@@ -11,6 +11,89 @@ ctx_to_ucrun(struct ubus_context *ctx)
 	return ucrun;
 }
 
+static uc_value_t *
+uc_blob_to_json(uc_vm_t *vm, struct blob_attr *attr, bool table, const char **name);
+
+static uc_value_t *
+uc_blob_array_to_json(uc_vm_t *vm, struct blob_attr *attr, size_t len, bool table)
+{
+	uc_value_t *o = table ? ucv_object_new(vm) : ucv_array_new(vm);
+	uc_value_t *v;
+	struct blob_attr *pos;
+	size_t rem = len;
+	const char *name;
+
+	if (!o)
+		return NULL;
+
+	__blob_for_each_attr(pos, attr, rem) {
+		name = NULL;
+		v = uc_blob_to_json(vm, pos, table, &name);
+
+		if (table && name)
+			ucv_object_add(o, name, v);
+		else if (!table)
+			ucv_array_push(o, v);
+		else
+			ucv_put(v);
+	}
+
+	return o;
+}
+
+static uc_value_t *
+uc_blob_to_json(uc_vm_t *vm, struct blob_attr *attr, bool table, const char **name)
+{
+	void *data;
+	int len;
+
+	if (!blobmsg_check_attr(attr, false))
+		return NULL;
+
+	if (table && blobmsg_name(attr)[0])
+		*name = blobmsg_name(attr);
+
+	data = blobmsg_data(attr);
+	len = blobmsg_data_len(attr);
+
+	switch (blob_id(attr)) {
+	case BLOBMSG_TYPE_BOOL:
+		return ucv_boolean_new(*(uint8_t *)data);
+
+	case BLOBMSG_TYPE_INT16:
+		return ucv_int64_new((int64_t)be16_to_cpu(*(uint16_t *)data));
+
+	case BLOBMSG_TYPE_INT32:
+		return ucv_int64_new((int64_t)be32_to_cpu(*(uint32_t *)data));
+
+	case BLOBMSG_TYPE_INT64:
+		return ucv_uint64_new(be64_to_cpu(*(uint64_t *)data));
+
+	case BLOBMSG_TYPE_DOUBLE:
+		;
+		union {
+			double d;
+			uint64_t u64;
+		} v;
+
+		v.u64 = be64_to_cpu(*(uint64_t *)data);
+
+		return ucv_double_new(v.d);
+
+	case BLOBMSG_TYPE_STRING:
+		return ucv_string_new(data);
+
+	case BLOBMSG_TYPE_ARRAY:
+		return uc_blob_array_to_json(vm, data, len, false);
+
+	case BLOBMSG_TYPE_TABLE:
+		return uc_blob_array_to_json(vm, data, len, true);
+
+	default:
+		return NULL;
+	}
+}
+
 static int
 ubus_ucode_cb(struct ubus_context *ctx,
 	      struct ubus_object *obj,
@@ -19,7 +102,6 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	      struct blob_attr *msg)
 {
 	struct ucrun *ucrun = ctx_to_ucrun(ctx);
-	char *json = NULL;
 
 	/* try to find the method */
 	uc_value_t *methods = ucv_object_get(ucrun->ubus, "methods", NULL);
@@ -34,10 +116,6 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	if (!method)
 		return UBUS_STATUS_METHOD_NOT_FOUND;
 
-	/* check if we want to pass anything into the function */
-	if (msg)
-		json = blobmsg_format_json(msg, true);
-
 	/* check if the callback is valid */
 	cb = ucv_object_get(method, "cb", NULL);
 	if (!ucv_is_callable(cb))
@@ -46,11 +124,12 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	/* push the callback to the stack */
 	ucv_get(cb);
 	uc_vm_stack_push(&ucrun->vm, cb);
-	if (json)
-		uc_vm_stack_push(&ucrun->vm, ucv_string_new(json));
+	if (msg)
+		uc_vm_stack_push(&ucrun->vm,
+				 uc_blob_array_to_json(&ucrun->vm, blob_data(msg), blob_len(msg), true));
 
 	/* execute the callback */
-	if (!uc_vm_call(&ucrun->vm, false, json ? 1 : 0))
+	if (!uc_vm_call(&ucrun->vm, false, msg ? 1 : 0))
 		retval = uc_vm_stack_pop(&ucrun->vm);
 	else
 		fprintf(stderr, "Failed to invoke ubus cb\n");
@@ -63,9 +142,6 @@ ubus_ucode_cb(struct ubus_context *ctx,
 		if (blobmsg_len(u.head))
 			ubus_send_reply(ctx, req, u.head);
 	}
-
-	if (json)
-		free(json);
 
 	return UBUS_STATUS_OK;
 }

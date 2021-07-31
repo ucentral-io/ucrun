@@ -4,7 +4,8 @@
 
 		methods: {
 			foo: {
-				cb: function() {
+				cb: function(msg) {
+					printf("%s\n", msg);
 					printf("fooo\n");
 					return { foo: true };
 				}
