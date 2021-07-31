@@ -231,7 +231,8 @@ ucode_init_ulog(struct ucrun *ucrun)
 	}
 
 	/* open the log */
-	ulog_open(flags, LOG_DAEMON, ucv_string_get(identity));
+	ucrun->ulog_identity = strdup(ucv_string_get(identity));
+	ulog_open(flags, LOG_DAEMON, ucrun->ulog_identity);
 }
 
 int
@@ -303,6 +304,10 @@ ucode_deinit(struct ucrun *ucrun)
 	/* start by killing all pending timers */
 	list_for_each_entry_safe(timeout, p, &ucrun->timeout, list)
 		uc_uloop_timeout_free(timeout);
+
+	/* free ulog */
+	if (ucrun->ulog_identity)
+		free(ucrun->ulog_identity);
 
 	/* disconnect from ubus */
 	ubus_deinit(ucrun);

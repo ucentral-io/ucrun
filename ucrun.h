@@ -13,6 +13,7 @@ struct ucrun {
 	uc_vm_t vm;
 	uc_function_t *prog;
 
+	char *ulog_identity;
 
 	uc_value_t *ubus;
 	char *ubus_name;
