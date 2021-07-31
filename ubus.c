@@ -150,8 +150,23 @@ static void
 ubus_connect_handler(struct ubus_context *ctx)
 {
 	struct ucrun *ucrun = ctx_to_ucrun(ctx);
+	uc_value_t *connect;
 
+	/* register the ubus object */
 	ubus_add_object(ctx, &ucrun->ubus_object);
+
+	/* check if the user code has a connect handler */
+	connect = ucv_object_get(ucrun->ubus, "connect", NULL);
+	if (!ucv_is_callable(connect))
+		return;
+
+	/* push the callback to the stack */
+	ucv_get(connect);
+	uc_vm_stack_push(&ucrun->vm, connect);
+
+	/* execute the callback */
+	if (!uc_vm_call(&ucrun->vm, false, 0))
+		uc_vm_stack_pop(&ucrun->vm);
 }
 
 void

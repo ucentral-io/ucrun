@@ -2,6 +2,10 @@
 	global.ubus = {
 		object: "ucrun",
 
+		connect: function() {
+			printf("connected to ubus\n");
+		},
+
 		methods: {
 			foo: {
 				cb: function(msg) {
