@@ -13,6 +13,10 @@ function timeout(priv) {
 	return 5000;
 }
 
+function process(retcode, priv) {
+	printf("process completed %d %s\n", retcode, priv);
+}
+
 global.ulog = {
 	identity: "ucrun",
 	channels: [ "stdio", "syslog" ],
@@ -45,6 +49,8 @@ global.start = function() {
 	ulog_err("err\n");
 
 	uloop_timeout(timeout, 1000, { private: "data" });
+	uloop_process(process, [ "sleep", "10" ], { sleep: 10 });
+	uloop_process(process, [ "echo", "abc" ], { echo: "abc" });
 };
 
 global.stop = function() {

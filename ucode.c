@@ -114,7 +114,7 @@ uc_uloop_timeout_cb(struct uloop_timeout *t)
 
 	/* push the function and private data to the stack */
 	uc_vm_stack_push(&timeout->ucrun->vm, ucv_get(timeout->function));
-	if (timeout-> priv)
+	if (timeout->priv)
 		uc_vm_stack_push(&timeout->ucrun->vm, ucv_get(timeout->priv));
 	/* invoke function with zero arguments */
 	if (uc_vm_call(&timeout->ucrun->vm, false, timeout->priv ? 1 : 0)) {
@@ -160,6 +160,95 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 
 	/* track the timer in our context */
 	list_add(&timeout->list, &vm_to_ucrun(vm)->timeout);
+
+	return ucv_int64_new(0);
+}
+
+static void
+uc_uloop_process_free(struct ucrun_process *process)
+{
+	ucv_put(process->function);
+	ucv_put(process->priv);
+	list_del(&process->list);
+	free(process);
+}
+
+static void
+uc_uloop_process_cb(struct uloop_process *p, int ret)
+{
+	struct ucrun_process *process = container_of(p, struct ucrun_process, process);
+	uc_value_t *retval = NULL;
+
+	/* push the function and private data to the stack */
+	uc_vm_stack_push(&process->ucrun->vm, ucv_get(process->function));
+	uc_vm_stack_push(&process->ucrun->vm, ucv_int64_new(ret));
+	if (process->priv)
+		uc_vm_stack_push(&process->ucrun->vm, ucv_get(process->priv));
+
+	/* execute the callback */
+	if (!uc_vm_call(&process->ucrun->vm, false, process->priv ? 2 : 1))
+		retval = uc_vm_stack_pop(&process->ucrun->vm);
+	ucv_put(retval);
+
+	/* free the timer context */
+	uc_uloop_process_free(process);
+}
+
+static uc_value_t *
+uc_uloop_process(uc_vm_t *vm, size_t nargs)
+{
+	struct ucrun_process *process;
+	pid_t pid;
+
+	uc_value_t *function = uc_fn_arg(0);
+	uc_value_t *command = uc_fn_arg(1);
+	uc_value_t *priv = uc_fn_arg(2);
+
+	/* check if the call signature is correct */
+	if (!ucv_is_callable(function) || ucv_type(command) != UC_ARRAY)
+		return ucv_int64_new(-1);
+
+	/* fork of the child */
+	pid = fork();
+	if (pid < 0)
+                return ucv_int64_new(-1);
+
+	/* exec into the requested command */
+	if (!pid) {
+		int argc, arg;
+		char **argv;
+
+		uloop_end();
+
+		/* build the argv structure */
+		argc = ucv_array_length(command);
+		argv = malloc(sizeof(char *) * (argc + 1));
+		argv[argc] = NULL;
+
+		for (arg = 0; arg < argc; arg++) {
+			uc_value_t *val = ucv_array_get(command, arg);
+
+			argv[arg] = ucv_to_string(vm, val);
+		}
+
+		/* and exec the process */
+		execvp(argv[0], argv);
+		exit(127);
+	}
+
+	/* add the uloop process */
+	process = malloc(sizeof(*process));
+	memset(process, 0, sizeof(*process));
+	process->function = ucv_get(function);
+	process->process.cb = uc_uloop_process_cb;
+	process->ucrun = vm_to_ucrun(vm);
+	if (priv)
+		process->priv = ucv_get(priv);
+	process->process.pid = pid;
+	uloop_process_add(&process->process);
+
+	/* track the timer in our context */
+	list_add(&process->list, &vm_to_ucrun(vm)->process);
 
 	return ucv_int64_new(0);
 }
@@ -261,6 +350,7 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 
 	/* setup the ucrun context */
 	INIT_LIST_HEAD(&ucrun->timeout);
+	INIT_LIST_HEAD(&ucrun->process);
 
 	/* initialize VM context */
 	uc_vm_init(&ucrun->vm, &config);
@@ -278,6 +368,7 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 
 	/* load native functions into the vm */
 	uc_function_register(ucrun->scope, "uloop_timeout", uc_uloop_timeout);
+	uc_function_register(ucrun->scope, "uloop_process", uc_uloop_process);
 	uc_function_register(ucrun->scope, "ulog_info", uc_ulog_info);
 	uc_function_register(ucrun->scope, "ulog_note", uc_ulog_note);
 	uc_function_register(ucrun->scope, "ulog_warn", uc_ulog_warn);
@@ -319,7 +410,8 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 void
 ucode_deinit(struct ucrun *ucrun)
 {
-	struct ucrun_timeout *timeout, *p;
+	struct ucrun_timeout *timeout, *t;
+	struct ucrun_process *process, *p;
 	uc_value_t *stop;
 
 	/* tell the user code that we are shutting down */
@@ -337,8 +429,12 @@ ucode_deinit(struct ucrun *ucrun)
 	}
 
 	/* start by killing all pending timers */
-	list_for_each_entry_safe(timeout, p, &ucrun->timeout, list)
+	list_for_each_entry_safe(timeout, t, &ucrun->timeout, list)
 		uc_uloop_timeout_free(timeout);
+
+	/* start by killing all pending processes */
+	list_for_each_entry_safe(process, p, &ucrun->process, list)
+		uc_uloop_process_free(process);
 
 	/* free ulog */
 	if (ucrun->ulog_identity)

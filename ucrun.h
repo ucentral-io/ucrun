@@ -26,6 +26,7 @@
 
 struct ucrun {
 	struct list_head timeout;
+	struct list_head process;
 
 	uc_vm_t vm;
 	uc_value_t *scope;
@@ -46,6 +47,15 @@ struct ucrun_timeout {
 	struct ucrun *ucrun;
 
 	struct uloop_timeout timeout;
+	uc_value_t *function;
+	uc_value_t *priv;
+};
+
+struct ucrun_process {
+	struct list_head list;
+	struct ucrun *ucrun;
+
+	struct uloop_process process;
 	uc_value_t *function;
 	uc_value_t *priv;
 };
