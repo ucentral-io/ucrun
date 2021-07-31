@@ -148,8 +148,6 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	/* execute the callback */
 	if (!uc_vm_call(&ucrun->vm, false, msg ? 1 : 0))
 		retval = uc_vm_stack_pop(&ucrun->vm);
-	else
-		fprintf(stderr, "Failed to invoke ubus cb\n");
 
 	if (ucv_type(retval) == UC_OBJECT) {
 		json_object *o;
@@ -164,6 +162,8 @@ ubus_ucode_cb(struct ubus_context *ctx,
 			ubus_send_reply(ctx, req, u.head);
 	}
 
+	ucv_put(retval);
+
 	return UBUS_STATUS_OK;
 }
 
@@ -171,7 +171,7 @@ static void
 ubus_connect_handler(struct ubus_context *ctx)
 {
 	struct ucrun *ucrun = ctx_to_ucrun(ctx);
-	uc_value_t *connect;
+	uc_value_t *connect, *retval = NULL;
 
 	/* register the ubus object */
 	ubus_add_object(ctx, &ucrun->ubus_object);
@@ -187,7 +187,8 @@ ubus_connect_handler(struct ubus_context *ctx)
 
 	/* execute the callback */
 	if (!uc_vm_call(&ucrun->vm, false, 0))
-		uc_vm_stack_pop(&ucrun->vm);
+		retval = uc_vm_stack_pop(&ucrun->vm);
+	ucv_put(retval);
 }
 
 void

@@ -167,7 +167,7 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 static void
 ucode_init_ubus(struct ucrun *ucrun)
 {
-	uc_value_t *ubus = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "ubus", NULL);
+	uc_value_t *ubus = ucv_object_get(ucrun->scope, "ubus", NULL);
 
 	if (!ubus)
 		return;
@@ -219,7 +219,7 @@ uc_ulog_err(uc_vm_t *vm, size_t nargs)
 static void
 ucode_init_ulog(struct ucrun *ucrun)
 {
-	uc_value_t *ulog = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "ulog", NULL);
+	uc_value_t *ulog = ucv_object_get(ucrun->scope, "ulog", NULL);
 	uc_value_t *identity, *channels;
 	int flags = 0, channel;
 
@@ -256,7 +256,7 @@ ucode_init_ulog(struct ucrun *ucrun)
 int
 ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 {
-	uc_value_t *ARGV, *start;
+	uc_value_t *ARGV, *start, *retval = NULL;
 	int i;
 
 	/* setup the ucrun context */
@@ -271,16 +271,17 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 		uc_vm_free(&ucrun->vm);
 		return -1;
 	}
+	ucrun->scope = uc_vm_scope_get(&ucrun->vm);
 
 	/* load standard library into global VM scope */
 	uc_stdlib_load(uc_vm_scope_get(&ucrun->vm));
 
 	/* load native functions into the vm */
-	uc_function_register(uc_vm_scope_get(&ucrun->vm), "uloop_timeout", uc_uloop_timeout);
-	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_info", uc_ulog_info);
-	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_note", uc_ulog_note);
-	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_warn", uc_ulog_warn);
-	uc_function_register(uc_vm_scope_get(&ucrun->vm), "ulog_err", uc_ulog_err);
+	uc_function_register(ucrun->scope, "uloop_timeout", uc_uloop_timeout);
+	uc_function_register(ucrun->scope, "ulog_info", uc_ulog_info);
+	uc_function_register(ucrun->scope, "ulog_note", uc_ulog_note);
+	uc_function_register(ucrun->scope, "ulog_warn", uc_ulog_warn);
+	uc_function_register(ucrun->scope, "ulog_err", uc_ulog_err);
 
 	/* add commandline parameters */
 	ARGV = ucv_array_new(&ucrun->vm);
@@ -288,7 +289,7 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 	for (i = 2; i < argc; i++ )
 		ucv_array_push(ARGV, ucv_string_new(argv[i]));
 
-	ucv_object_add(uc_vm_scope_get(&ucrun->vm), "ARGV", ARGV);
+	ucv_object_add(ucrun->scope, "ARGV", ARGV);
 
 	/* load our user code */
 	ucode_run(ucrun);
@@ -297,7 +298,7 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 	ucode_init_ulog(ucrun);
 
 	/* everything is now setup, start the user code */
-	start = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "start", NULL);
+	start = ucv_object_get(ucrun->scope, "start", NULL);
 	if (!ucv_is_callable(start))
 		return -1;
 
@@ -306,7 +307,8 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 
 	/* execute the start function */
 	if (!uc_vm_call(&ucrun->vm, false, 0))
-		uc_vm_stack_pop(&ucrun->vm);
+		retval = uc_vm_stack_pop(&ucrun->vm);
+	ucv_put(retval);
 
 	/* spawn ubus if requested, this needs to happen after start() was called */
 	ucode_init_ubus(ucrun);
@@ -321,14 +323,17 @@ ucode_deinit(struct ucrun *ucrun)
 	uc_value_t *stop;
 
 	/* tell the user code that we are shutting down */
-	stop = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "stop", NULL);
+	stop = ucv_object_get(ucrun->scope, "stop", NULL);
 	if (ucv_is_callable(stop)) {
+		uc_value_t *retval = NULL;
+
 		/* push the stop function to the stack */
 		uc_vm_stack_push(&ucrun->vm, ucv_get(stop));
 
 		/* execute the stop function */
 		if (!uc_vm_call(&ucrun->vm, false, 0))
-			uc_vm_stack_pop(&ucrun->vm);
+			retval = uc_vm_stack_pop(&ucrun->vm);
+		ucv_put(retval);
 	}
 
 	/* start by killing all pending timers */
