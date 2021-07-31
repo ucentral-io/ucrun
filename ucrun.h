@@ -28,6 +28,7 @@ struct ucrun_timeout {
 
 	struct uloop_timeout timeout;
 	uc_value_t *function;
+	uc_value_t *priv;
 };
 
 static inline struct ucrun*

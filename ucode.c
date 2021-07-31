@@ -86,11 +86,12 @@ uc_uloop_timeout_cb(struct uloop_timeout *t)
 	struct ucrun_timeout *timeout = container_of(t, struct ucrun_timeout, timeout);
 	uc_value_t *retval = NULL;
 
-	/* push the function to the stack */
+	/* push the function and private data to the stack */
 	uc_vm_stack_push(&timeout->ucrun->vm, ucv_get(timeout->function));
-
+	if (timeout-> priv)
+		uc_vm_stack_push(&timeout->ucrun->vm, ucv_get(timeout->priv));
 	/* invoke function with zero arguments */
-	if (uc_vm_call(&timeout->ucrun->vm, false, 0)) {
+	if (uc_vm_call(&timeout->ucrun->vm, false, timeout->priv ? 1 : 0)) {
 		/* function raised an exception, bail out */
 		goto out;
 	}
@@ -106,6 +107,7 @@ uc_uloop_timeout_cb(struct uloop_timeout *t)
 out:
 	/* free the timer context */
 	ucv_put(timeout->function);
+	ucv_put(timeout->priv);
 	free(timeout);
 }
 
@@ -116,6 +118,7 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 
 	uc_value_t *function = uc_fn_arg(0);
 	uc_value_t *expire = uc_fn_arg(1);
+	uc_value_t *priv = uc_fn_arg(2);
 
 	/* check if the call signature is correct */
 	if (!ucv_is_callable(function) || ucv_type(expire) != UC_INTEGER)
@@ -127,6 +130,8 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 	timeout->function = ucv_get(function);
 	timeout->timeout.cb = uc_uloop_timeout_cb;
 	timeout->ucrun = vm_to_ucrun(vm);
+	if (priv)
+		timeout->priv = ucv_get(priv);
 	uloop_timeout_set(&timeout->timeout, ucv_int64_get(expire));
 
 	return ucv_int64_new(0);

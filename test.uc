@@ -2,8 +2,8 @@
 
 local n_runs = 0;
 
-function timeout() {
-	printf("timeout[%d]: %d\n", n_runs, time());
+function timeout(priv) {
+	printf("timeout[%d]: %d - %s\n", n_runs, time(), priv);
 
 	if (++n_runs >= 3) {
 		printf("not scheduling new timeout\n");
@@ -44,5 +44,5 @@ global.start = function() {
 	ulog_warn("warn\n");
 	ulog_err("err\n");
 
-	uloop_timeout(timeout, 1000);
+	uloop_timeout(timeout, 1000, { private: "data" });
 }
