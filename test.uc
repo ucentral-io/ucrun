@@ -30,5 +30,7 @@
 		return 5000;
 	}
 
+	printf("%s\n", ARGV);
+
 	uloop_timeout(timeout, 1000);
 %}

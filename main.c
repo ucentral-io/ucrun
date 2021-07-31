@@ -8,7 +8,7 @@ int main(int argc, const char **argv)
 		return -1;
 
 	uloop_init();
-	ucode_init(&ucrun, argv[1]);
+	ucode_init(&ucrun, argc, argv);
 	uloop_run();
 
 	return 0;

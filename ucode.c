@@ -144,13 +144,13 @@ ucode_init_ubus(struct ucrun *ucrun)
 }
 
 int
-ucode_init(struct ucrun *ucrun, const char *file)
+ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 {
 	/* initialize VM context */
 	uc_vm_init(&ucrun->vm, &config);
 
 	/* load our user code */
-	ucrun->prog = ucode_load(file);
+	ucrun->prog = ucode_load(argv[1]);
 	if (!ucrun->prog) {
 		uc_vm_free(&ucrun->vm);
 		return -1;
@@ -159,6 +159,17 @@ ucode_init(struct ucrun *ucrun, const char *file)
 	/* load standard library into global VM scope */
 	uc_stdlib_load(uc_vm_scope_get(&ucrun->vm));
 	uc_function_register(uc_vm_scope_get(&ucrun->vm), "uloop_timeout", uc_uloop_timeout);
+
+	/* add commandline parameters */
+	if (argc > 2) {
+		uc_value_t *ARGV = ucv_array_new(&ucrun->vm);
+		int i;
+
+		for (i = 2; i < argc; i++ )
+			ucv_array_push(ARGV, ucv_string_new(argv[i]));
+
+		ucv_object_add(uc_vm_scope_get(&ucrun->vm), "ARGV", ARGV);
+	}
 
 	/* load our user code */
 	ucode_run(ucrun);
