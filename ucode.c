@@ -303,4 +303,7 @@ ucode_deinit(struct ucrun *ucrun)
 	/* start by killing all pending timers */
 	list_for_each_entry_safe(timeout, p, &ucrun->timeout, list)
 		uc_uloop_timeout_free(timeout);
+
+	/* free VM context */
+	uc_vm_free(&ucrun->vm);
 }
