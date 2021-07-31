@@ -1,14 +1,14 @@
-#include "urun.h"
+#include "ucrun.h"
 
 static struct blob_buf u;
 
-struct urun *
-ctx_to_urun(struct ubus_context *ctx)
+struct ucrun *
+ctx_to_ucrun(struct ubus_context *ctx)
 {
 	struct ubus_auto_conn *conn = container_of(ctx, struct ubus_auto_conn, ctx);
-	struct urun *urun = container_of(conn, struct urun, ubus_auto_conn);
+	struct ucrun *ucrun = container_of(conn, struct ucrun, ubus_auto_conn);
 
-	return urun;
+	return ucrun;
 }
 
 static int
@@ -18,11 +18,11 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	      const char *name,
 	      struct blob_attr *msg)
 {
-	struct urun *urun = ctx_to_urun(ctx);
+	struct ucrun *ucrun = ctx_to_ucrun(ctx);
 	char *json = NULL;
 
 	/* try to find the method */
-	uc_value_t *methods = ucv_object_get(urun->ubus, "methods", NULL);
+	uc_value_t *methods = ucv_object_get(ucrun->ubus, "methods", NULL);
 	uc_value_t *method = NULL, *cb, *retval = NULL;
 
 	ucv_object_foreach(methods, key, val) {
@@ -45,13 +45,13 @@ ubus_ucode_cb(struct ubus_context *ctx,
 
 	/* push the callback to the stack */
 	ucv_get(cb);
-	uc_vm_stack_push(&urun->vm, cb);
+	uc_vm_stack_push(&ucrun->vm, cb);
 	if (json)
-		uc_vm_stack_push(&urun->vm, ucv_string_new(json));
+		uc_vm_stack_push(&ucrun->vm, ucv_string_new(json));
 
 	/* execute the callback */
-	if (!uc_vm_call(&urun->vm, false, json ? 1 : 0))
-		retval = uc_vm_stack_pop(&urun->vm);
+	if (!uc_vm_call(&ucrun->vm, false, json ? 1 : 0))
+		retval = uc_vm_stack_pop(&ucrun->vm);
 	else
 		fprintf(stderr, "Failed to invoke ubus cb\n");
 
@@ -73,21 +73,21 @@ ubus_ucode_cb(struct ubus_context *ctx,
 static void
 ubus_connect_handler(struct ubus_context *ctx)
 {
-	struct urun *urun = ctx_to_urun(ctx);
+	struct ucrun *ucrun = ctx_to_ucrun(ctx);
 
-	ubus_add_object(ctx, &urun->ubus_object);
+	ubus_add_object(ctx, &ucrun->ubus_object);
 }
 
 void
-ubus_init(struct urun *urun)
+ubus_init(struct ucrun *ucrun)
 {
 	int n_methods, n = 0;
 
 	/* validate that the ubus declaration is complete */
-	uc_value_t *object = ucv_object_get(urun->ubus, "object", NULL);
-	uc_value_t *methods = ucv_object_get(urun->ubus, "methods", NULL);
+	uc_value_t *object = ucv_object_get(ucrun->ubus, "object", NULL);
+	uc_value_t *methods = ucv_object_get(ucrun->ubus, "methods", NULL);
 
-	ucv_get(urun->ubus);
+	ucv_get(ucrun->ubus);
 
 	if (ucv_type(object) != UC_STRING || ucv_type(methods) != UC_OBJECT) {
 		fprintf(stderr, "The ubus declaration is incomplete\n");
@@ -96,42 +96,42 @@ ubus_init(struct urun *urun)
 
 	/* create our ubus methods */
 	n_methods = ucv_object_length(methods);
-	urun->ubus_method = malloc(n_methods * sizeof(struct ubus_method));
-	memset(urun->ubus_method, 0, n_methods * sizeof(struct ubus_method));
+	ucrun->ubus_method = malloc(n_methods * sizeof(struct ubus_method));
+	memset(ucrun->ubus_method, 0, n_methods * sizeof(struct ubus_method));
 
 	n_methods = 0;
 	ucv_object_foreach(methods, key, val) {
 		if (!ucv_object_get(val, "cb", NULL))
 			continue;
 
-		urun->ubus_method[n].name = key;
-		urun->ubus_method[n].handler = ubus_ucode_cb;
+		ucrun->ubus_method[n].name = key;
+		ucrun->ubus_method[n].handler = ubus_ucode_cb;
 		n_methods++;
 	}
 
 	/* setup the ubus object */
-	urun->ubus_name = strdup(ucv_string_get(object));
+	ucrun->ubus_name = strdup(ucv_string_get(object));
 
-	urun->ubus_object_type.name = urun->ubus_name;
-	urun->ubus_object_type.methods = urun->ubus_method;
-	urun->ubus_object_type.n_methods = n_methods;
+	ucrun->ubus_object_type.name = ucrun->ubus_name;
+	ucrun->ubus_object_type.methods = ucrun->ubus_method;
+	ucrun->ubus_object_type.n_methods = n_methods;
 
-	urun->ubus_object.name = urun->ubus_name;
-	urun->ubus_object.type = &urun->ubus_object_type;
-	urun->ubus_object.methods = urun->ubus_method;
-	urun->ubus_object.n_methods = n_methods;
+	ucrun->ubus_object.name = ucrun->ubus_name;
+	ucrun->ubus_object.type = &ucrun->ubus_object_type;
+	ucrun->ubus_object.methods = ucrun->ubus_method;
+	ucrun->ubus_object.n_methods = n_methods;
 
 	/* try to connect to ubus */
-	memset(&urun->ubus_auto_conn, 0, sizeof(urun->ubus_auto_conn));
-	urun->ubus_auto_conn.cb = ubus_connect_handler;
-        ubus_auto_connect(&urun->ubus_auto_conn);
+	memset(&ucrun->ubus_auto_conn, 0, sizeof(ucrun->ubus_auto_conn));
+	ucrun->ubus_auto_conn.cb = ubus_connect_handler;
+        ubus_auto_connect(&ucrun->ubus_auto_conn);
 }
 
 void
-ubus_deinit(struct urun *urun)
+ubus_deinit(struct ucrun *ucrun)
 {
-	if (!urun->ubus)
+	if (!ucrun->ubus)
 		return;
 
-        ubus_auto_shutdown(&urun->ubus_auto_conn);
+        ubus_auto_shutdown(&ucrun->ubus_auto_conn);
 }

@@ -1,2 +1,2 @@
-extern int ucode_init(struct urun *urun, const char *file);
+extern int ucode_init(struct ucrun *ucrun, const char *file);
 

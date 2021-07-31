@@ -1,6 +1,6 @@
-#include "urun.h"
+#include "ucrun.h"
 
-static struct urun urun;
+static struct ucrun ucrun;
 
 int main(int argc, const char **argv)
 {
@@ -8,7 +8,7 @@ int main(int argc, const char **argv)
 		return -1;
 
 	uloop_init();
-	ucode_init(&urun, argv[1]);
+	ucode_init(&ucrun, argv[1]);
 	uloop_run();
 
 	return 0;

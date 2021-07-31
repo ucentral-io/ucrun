@@ -1,11 +1,11 @@
 {%
 	global.ubus = {
-		object: "urun",
+		object: "ucrun",
 
 		methods: {
 			foo: {
 				cb: function() {
-					printf("fooo");
+					printf("fooo\n");
 					return { foo: true };
 				}
 			}

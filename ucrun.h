@@ -6,7 +6,7 @@
 #include <libubox/blobmsg_json.h>
 #include <libubox/uloop.h>
 
-struct urun {
+struct ucrun {
 	struct list_head timeout;
 
 	uc_vm_t vm;
@@ -21,18 +21,18 @@ struct urun {
 	struct ubus_auto_conn ubus_auto_conn;
 };
 
-struct urun_timeout {
+struct ucrun_timeout {
 	struct list_head list;
-	struct urun *urun;
+	struct ucrun *ucrun;
 
 	struct uloop_timeout timeout;
 	uc_value_t *function;
 };
 
-static inline struct urun*
-vm_to_urun(uc_vm_t *vm)
+static inline struct ucrun*
+vm_to_ucrun(uc_vm_t *vm)
 {
-	return container_of(vm, struct urun, vm);
+	return container_of(vm, struct ucrun, vm);
 }
 
 #include "ucode.h"
