@@ -36,11 +36,13 @@ function timeout() {
 	return 5000;
 }
 
-ulog_info("info\n");
-ulog_note("note\n");
-ulog_warn("warn\n");
-ulog_err("err\n");
+global.start = function() {
+	printf("%s\n", ARGV);
 
-printf("%s\n", ARGV);
+	ulog_info("info\n");
+	ulog_note("note\n");
+	ulog_warn("warn\n");
+	ulog_err("err\n");
 
-uloop_timeout(timeout, 1000);
+	uloop_timeout(timeout, 1000);
+}

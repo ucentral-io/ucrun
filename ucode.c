@@ -222,7 +222,7 @@ ucode_init_ulog(struct ucrun *ucrun)
 int
 ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 {
-	uc_value_t *ARGV;
+	uc_value_t *ARGV, *start;
 	int i;
 
 	/* initialize VM context */
@@ -259,7 +259,19 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 	/* enable ulog if requested */
 	ucode_init_ulog(ucrun);
 
-	/* spawn ubus if requested */
+	/* everything is now setup, start the user code */
+	start = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "start", NULL);
+	if (!ucv_is_callable(start))
+		return -1;
+
+	/* push the start function to the stack */
+	uc_vm_stack_push(&ucrun->vm, ucv_get(start));
+
+	/* execute the start function */
+	if (!uc_vm_call(&ucrun->vm, false, 0))
+		uc_vm_stack_pop(&ucrun->vm);
+
+	/* spawn ubus if requested, this needs to happen after start() was called */
 	ucode_init_ubus(ucrun);
 
 	return 0;
