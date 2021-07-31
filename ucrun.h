@@ -38,6 +38,7 @@ vm_to_ucrun(uc_vm_t *vm)
 }
 
 extern int ucode_init(struct ucrun *ucrun, int argc, const char **argv);
+extern void ucode_deinit(struct ucrun *ucrun);
 
 extern void ubus_init(struct ucrun *ucrun);
 extern void ubus_deinit(struct ucrun *ucrun);

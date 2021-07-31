@@ -10,6 +10,7 @@ int main(int argc, const char **argv)
 	uloop_init();
 	ucode_init(&ucrun, argc, argv);
 	uloop_run();
+	ucode_deinit(&ucrun);
 
 	return 0;
 }

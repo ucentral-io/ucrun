@@ -81,6 +81,15 @@ ucode_load(const char *file) {
 }
 
 static void
+uc_uloop_timeout_free(struct ucrun_timeout *timeout)
+{
+	ucv_put(timeout->function);
+	ucv_put(timeout->priv);
+	list_del(&timeout->list);
+	free(timeout);
+}
+
+static void
 uc_uloop_timeout_cb(struct uloop_timeout *t)
 {
 	struct ucrun_timeout *timeout = container_of(t, struct ucrun_timeout, timeout);
@@ -106,10 +115,7 @@ uc_uloop_timeout_cb(struct uloop_timeout *t)
 
 out:
 	/* free the timer context */
-	ucv_put(timeout->function);
-	ucv_put(timeout->priv);
-	list_del(&timeout->list);
-	free(timeout);
+	uc_uloop_timeout_free(timeout);
 }
 
 static uc_value_t *
@@ -287,4 +293,14 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 	ucode_init_ubus(ucrun);
 
 	return 0;
+}
+
+void
+ucode_deinit(struct ucrun *ucrun)
+{
+	struct ucrun_timeout *timeout, *p;
+
+	/* start by killing all pending timers */
+	list_for_each_entry_safe(timeout, p, &ucrun->timeout, list)
+		uc_uloop_timeout_free(timeout);
 }
