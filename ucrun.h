@@ -35,5 +35,7 @@ vm_to_ucrun(uc_vm_t *vm)
 	return container_of(vm, struct ucrun, vm);
 }
 
-#include "ucode.h"
-#include "ubus.h"
+extern int ucode_init(struct ucrun *ucrun, const char *file);
+
+extern void ubus_init(struct ucrun *ucrun);
+extern void ubus_deinit(struct ucrun *ucrun);
