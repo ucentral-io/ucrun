@@ -1,7 +1,7 @@
 #include "ucrun.h"
 
 static uc_parse_config_t config = {
-        .strict_declarations = false,
+        .strict_declarations = true,
         .lstrip_blocks = true,
         .trim_blocks = true
 };
@@ -146,6 +146,9 @@ ucode_init_ubus(struct ucrun *ucrun)
 int
 ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 {
+	uc_value_t *ARGV;
+	int i;
+
 	/* initialize VM context */
 	uc_vm_init(&ucrun->vm, &config);
 
@@ -161,15 +164,12 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 	uc_function_register(uc_vm_scope_get(&ucrun->vm), "uloop_timeout", uc_uloop_timeout);
 
 	/* add commandline parameters */
-	if (argc > 2) {
-		uc_value_t *ARGV = ucv_array_new(&ucrun->vm);
-		int i;
+	ARGV = ucv_array_new(&ucrun->vm);
 
-		for (i = 2; i < argc; i++ )
-			ucv_array_push(ARGV, ucv_string_new(argv[i]));
+	for (i = 2; i < argc; i++ )
+		ucv_array_push(ARGV, ucv_string_new(argv[i]));
 
-		ucv_object_add(uc_vm_scope_get(&ucrun->vm), "ARGV", ARGV);
-	}
+	ucv_object_add(uc_vm_scope_get(&ucrun->vm), "ARGV", ARGV);
 
 	/* load our user code */
 	ucode_run(ucrun);
