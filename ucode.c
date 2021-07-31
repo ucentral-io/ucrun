@@ -204,7 +204,7 @@ ucode_init_ulog(struct ucrun *ucrun)
 {
 	uc_value_t *ulog = ucv_object_get(uc_vm_scope_get(&ucrun->vm), "ulog", NULL);
 	uc_value_t *identity, *channels;
-	int flags = 0;
+	int flags = 0, channel;
 
 	/* make sure the declartion is complete */
 	if (ucv_type(ulog) != UC_OBJECT)
@@ -217,7 +217,8 @@ ucode_init_ulog(struct ucrun *ucrun)
 		return;
 
 	/* figure out which channels were requested */
-	ucv_object_foreach(channels, key, val) {
+	for (channel = 0; channel < ucv_array_length(channels); channel++) {
+		uc_value_t *val = ucv_array_get(channels, channel);
 		char *v;
 
 		if (ucv_type(val) != UC_STRING)
