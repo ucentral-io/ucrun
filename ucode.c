@@ -125,12 +125,14 @@ uc_uloop_timeout_cb(struct uloop_timeout *t)
 	/* if the callback returned an integer, restart the timer */
 	if (ucv_type(retval) == UC_INTEGER) {
 		uloop_timeout_set(&timeout->timeout, ucv_int64_get(retval));
+		ucv_put(retval);
 		return;
 	}
 
 out:
 	/* free the timer context */
 	uc_uloop_timeout_free(timeout);
+	ucv_put(retval);
 }
 
 static uc_value_t *
