@@ -112,10 +112,10 @@ uc_uloop_timeout_cb(struct uloop_timeout *t)
 
 	/* push the function and private data to the stack */
 	uc_vm_stack_push(&timeout->ucrun->vm, ucv_get(timeout->function));
-	if (timeout->priv)
-		uc_vm_stack_push(&timeout->ucrun->vm, ucv_get(timeout->priv));
-	/* invoke function with zero arguments */
-	if (uc_vm_call(&timeout->ucrun->vm, false, timeout->priv ? 1 : 0)) {
+	uc_vm_stack_push(&timeout->ucrun->vm, ucv_get(timeout->priv));
+
+	/* invoke function */
+	if (uc_vm_call(&timeout->ucrun->vm, false, 1)) {
 		/* function raised an exception, bail out */
 		goto out;
 	}
@@ -151,8 +151,7 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 	timeout->function = ucv_get(function);
 	timeout->timeout.cb = uc_uloop_timeout_cb;
 	timeout->ucrun = vm_to_ucrun(vm);
-	if (priv)
-		timeout->priv = ucv_get(priv);
+	timeout->priv = ucv_get(priv);
 	uloop_timeout_set(&timeout->timeout, ucv_int64_get(expire));
 
 	/* track the timer in our context */
@@ -174,18 +173,15 @@ static void
 uc_uloop_process_cb(struct uloop_process *p, int ret)
 {
 	ucrun_process_t *process = container_of(p, ucrun_process_t, process);
-	uc_value_t *retval = NULL;
 
 	/* push the function and private data to the stack */
 	uc_vm_stack_push(&process->ucrun->vm, ucv_get(process->function));
 	uc_vm_stack_push(&process->ucrun->vm, ucv_int64_new(ret));
-	if (process->priv)
-		uc_vm_stack_push(&process->ucrun->vm, ucv_get(process->priv));
+	uc_vm_stack_push(&process->ucrun->vm, ucv_get(process->priv));
 
 	/* execute the callback */
-	if (!uc_vm_call(&process->ucrun->vm, false, process->priv ? 2 : 1))
-		retval = uc_vm_stack_pop(&process->ucrun->vm);
-	ucv_put(retval);
+	if (!uc_vm_call(&process->ucrun->vm, false, 2))
+		ucv_put(uc_vm_stack_pop(&process->ucrun->vm));
 
 	/* free the timer context */
 	uc_uloop_process_free(process);
@@ -238,8 +234,7 @@ uc_uloop_process(uc_vm_t *vm, size_t nargs)
 	process->function = ucv_get(function);
 	process->process.cb = uc_uloop_process_cb;
 	process->ucrun = vm_to_ucrun(vm);
-	if (priv)
-		process->priv = ucv_get(priv);
+	process->priv = ucv_get(priv);
 	process->process.pid = pid;
 	uloop_process_add(&process->process);
 
