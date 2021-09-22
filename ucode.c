@@ -327,9 +327,12 @@ ucode_init_ulog(ucrun_ctx_t *ucrun)
 			continue;
 
 		v = ucv_string_get(val);
-		if (!strcmp(v, "syslog"))
+
+		if (!strcmp(v, "kmsg"))
+			flags |= ULOG_KMSG;
+		else if (!strcmp(v, "syslog"))
 			flags |= ULOG_SYSLOG;
-		if (!strcmp(v, "stdio"))
+		else if (!strcmp(v, "stdio"))
 			flags |= ULOG_STDIO;
 	}
 
