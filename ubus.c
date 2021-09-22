@@ -19,11 +19,11 @@
 
 static struct blob_buf u;
 
-struct ucrun *
+ucrun_ctx_t *
 ctx_to_ucrun(struct ubus_context *ctx)
 {
 	struct ubus_auto_conn *conn = container_of(ctx, struct ubus_auto_conn, ctx);
-	struct ucrun *ucrun = container_of(conn, struct ucrun, ubus_auto_conn);
+	ucrun_ctx_t *ucrun = container_of(conn, ucrun_ctx_t, ubus_auto_conn);
 
 	return ucrun;
 }
@@ -118,7 +118,7 @@ ubus_ucode_cb(struct ubus_context *ctx,
 	      const char *name,
 	      struct blob_attr *msg)
 {
-	struct ucrun *ucrun = ctx_to_ucrun(ctx);
+	ucrun_ctx_t *ucrun = ctx_to_ucrun(ctx);
 
 	/* try to find the method */
 	uc_value_t *methods = ucv_object_get(ucrun->ubus, "methods", NULL);
@@ -170,7 +170,7 @@ ubus_ucode_cb(struct ubus_context *ctx,
 static void
 ubus_connect_handler(struct ubus_context *ctx)
 {
-	struct ucrun *ucrun = ctx_to_ucrun(ctx);
+	ucrun_ctx_t *ucrun = ctx_to_ucrun(ctx);
 	uc_value_t *connect, *retval = NULL;
 
 	/* register the ubus object */
@@ -192,7 +192,7 @@ ubus_connect_handler(struct ubus_context *ctx)
 }
 
 void
-ubus_init(struct ucrun *ucrun)
+ubus_init(ucrun_ctx_t *ucrun)
 {
 	int n_methods, n = 0;
 
@@ -241,7 +241,7 @@ ubus_init(struct ucrun *ucrun)
 }
 
 void
-ubus_deinit(struct ucrun *ucrun)
+ubus_deinit(ucrun_ctx_t *ucrun)
 {
 	if (!ucrun->ubus)
 		return;

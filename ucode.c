@@ -18,14 +18,12 @@
 #include "ucrun.h"
 
 static uc_parse_config_t config = {
-        .strict_declarations = true,
-        .lstrip_blocks = true,
-        .trim_blocks = true,
+	.strict_declarations = true,
 	.raw_mode = true,
 };
 
 static int
-ucode_run(struct ucrun *ucrun)
+ucode_run(ucrun_ctx_t *ucrun)
 {
 	int exit_code = 0;
 
@@ -98,7 +96,7 @@ ucode_load(const char *file) {
 }
 
 static void
-uc_uloop_timeout_free(struct ucrun_timeout *timeout)
+uc_uloop_timeout_free(ucrun_timeout_t *timeout)
 {
 	ucv_put(timeout->function);
 	ucv_put(timeout->priv);
@@ -109,7 +107,7 @@ uc_uloop_timeout_free(struct ucrun_timeout *timeout)
 static void
 uc_uloop_timeout_cb(struct uloop_timeout *t)
 {
-	struct ucrun_timeout *timeout = container_of(t, struct ucrun_timeout, timeout);
+	ucrun_timeout_t *timeout = container_of(t, ucrun_timeout_t, timeout);
 	uc_value_t *retval = NULL;
 
 	/* push the function and private data to the stack */
@@ -138,7 +136,7 @@ out:
 static uc_value_t *
 uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 {
-	struct ucrun_timeout *timeout;
+	ucrun_timeout_t *timeout;
 
 	uc_value_t *function = uc_fn_arg(0);
 	uc_value_t *expire = uc_fn_arg(1);
@@ -165,7 +163,7 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 }
 
 static void
-uc_uloop_process_free(struct ucrun_process *process)
+uc_uloop_process_free(ucrun_process_t *process)
 {
 	ucv_put(process->function);
 	ucv_put(process->priv);
@@ -176,7 +174,7 @@ uc_uloop_process_free(struct ucrun_process *process)
 static void
 uc_uloop_process_cb(struct uloop_process *p, int ret)
 {
-	struct ucrun_process *process = container_of(p, struct ucrun_process, process);
+	ucrun_process_t *process = container_of(p, ucrun_process_t, process);
 	uc_value_t *retval = NULL;
 
 	/* push the function and private data to the stack */
@@ -197,7 +195,7 @@ uc_uloop_process_cb(struct uloop_process *p, int ret)
 static uc_value_t *
 uc_uloop_process(uc_vm_t *vm, size_t nargs)
 {
-	struct ucrun_process *process;
+	ucrun_process_t *process;
 	pid_t pid;
 
 	uc_value_t *function = uc_fn_arg(0);
@@ -254,7 +252,7 @@ uc_uloop_process(uc_vm_t *vm, size_t nargs)
 }
 
 static void
-ucode_init_ubus(struct ucrun *ucrun)
+ucode_init_ubus(ucrun_ctx_t *ucrun)
 {
 	uc_value_t *ubus = ucv_object_get(ucrun->scope, "ubus", NULL);
 
@@ -306,7 +304,7 @@ uc_ulog_err(uc_vm_t *vm, size_t nargs)
 }
 
 static void
-ucode_init_ulog(struct ucrun *ucrun)
+ucode_init_ulog(ucrun_ctx_t *ucrun)
 {
 	uc_value_t *ulog = ucv_object_get(ucrun->scope, "ulog", NULL);
 	uc_value_t *identity, *channels;
@@ -343,7 +341,7 @@ ucode_init_ulog(struct ucrun *ucrun)
 }
 
 int
-ucode_init(struct ucrun *ucrun, int argc, const char **argv)
+ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv)
 {
 	uc_value_t *ARGV, *start, *retval = NULL;
 	int i;
@@ -408,10 +406,10 @@ ucode_init(struct ucrun *ucrun, int argc, const char **argv)
 }
 
 void
-ucode_deinit(struct ucrun *ucrun)
+ucode_deinit(ucrun_ctx_t *ucrun)
 {
-	struct ucrun_timeout *timeout, *t;
-	struct ucrun_process *process, *p;
+	ucrun_timeout_t *timeout, *t;
+	ucrun_process_t *process, *p;
 	uc_value_t *stop;
 
 	/* tell the user code that we are shutting down */

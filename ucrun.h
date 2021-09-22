@@ -24,7 +24,7 @@
 #include <libubox/uloop.h>
 #include <libubox/ulog.h>
 
-struct ucrun {
+typedef struct {
 	struct list_head timeout;
 	struct list_head process;
 
@@ -40,34 +40,34 @@ struct ucrun {
 	struct ubus_object_type ubus_object_type;
 	struct ubus_object ubus_object;
 	struct ubus_auto_conn ubus_auto_conn;
-};
+} ucrun_ctx_t;
 
-struct ucrun_timeout {
+typedef struct {
 	struct list_head list;
-	struct ucrun *ucrun;
+	ucrun_ctx_t *ucrun;
 
 	struct uloop_timeout timeout;
 	uc_value_t *function;
 	uc_value_t *priv;
-};
+} ucrun_timeout_t;
 
-struct ucrun_process {
+typedef struct {
 	struct list_head list;
-	struct ucrun *ucrun;
+	ucrun_ctx_t *ucrun;
 
 	struct uloop_process process;
 	uc_value_t *function;
 	uc_value_t *priv;
-};
+} ucrun_process_t;
 
-static inline struct ucrun*
+static inline ucrun_ctx_t *
 vm_to_ucrun(uc_vm_t *vm)
 {
-	return container_of(vm, struct ucrun, vm);
+	return container_of(vm, ucrun_ctx_t, vm);
 }
 
-extern int ucode_init(struct ucrun *ucrun, int argc, const char **argv);
-extern void ucode_deinit(struct ucrun *ucrun);
+extern int ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv);
+extern void ucode_deinit(ucrun_ctx_t *ucrun);
 
-extern void ubus_init(struct ucrun *ucrun);
-extern void ubus_deinit(struct ucrun *ucrun);
+extern void ubus_init(ucrun_ctx_t *ucrun);
+extern void ubus_deinit(ucrun_ctx_t *ucrun);

@@ -17,7 +17,7 @@
 
 #include "ucrun.h"
 
-static struct ucrun ucrun;
+static ucrun_ctx_t ucrun;
 
 int main(int argc, const char **argv)
 {
