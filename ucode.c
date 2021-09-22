@@ -270,9 +270,14 @@ uc_ulog(uc_vm_t *vm, size_t nargs, int severity)
 	if (!message)
 		return ucv_int64_new(-1);
 
-	string = ucv_to_string(vm, message);
-	ulog(severity, "%s", string);
-	free(string);
+	if (ucv_type(message) == UC_STRING) {
+		ulog(severity, "%s", ucv_string_get(message));
+	}
+	else {
+		string = ucv_to_string(vm, message);
+		ulog(severity, "%s", string);
+		free(string);
+	}
 
 	return ucv_int64_new(0);
 }
