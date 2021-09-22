@@ -209,8 +209,7 @@ ubus_init(ucrun_ctx_t *ucrun)
 
 	/* create our ubus methods */
 	n_methods = ucv_object_length(methods);
-	ucrun->ubus_method = malloc(n_methods * sizeof(struct ubus_method));
-	memset(ucrun->ubus_method, 0, n_methods * sizeof(struct ubus_method));
+	ucrun->ubus_method = calloc(n_methods, sizeof(struct ubus_method));
 
 	n_methods = 0;
 	ucv_object_foreach(methods, key, val) {
@@ -235,9 +234,8 @@ ubus_init(ucrun_ctx_t *ucrun)
 	ucrun->ubus_object.n_methods = n_methods;
 
 	/* try to connect to ubus */
-	memset(&ucrun->ubus_auto_conn, 0, sizeof(ucrun->ubus_auto_conn));
 	ucrun->ubus_auto_conn.cb = ubus_connect_handler;
-        ubus_auto_connect(&ucrun->ubus_auto_conn);
+	ubus_auto_connect(&ucrun->ubus_auto_conn);
 }
 
 void

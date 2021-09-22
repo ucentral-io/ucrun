@@ -147,8 +147,7 @@ uc_uloop_timeout(uc_vm_t *vm, size_t nargs)
 		return ucv_int64_new(-1);
 
 	/* add the uloop timer */
-	timeout = malloc(sizeof(*timeout));
-	memset(timeout, 0, sizeof(*timeout));
+	timeout = calloc(1, sizeof(*timeout));
 	timeout->function = ucv_get(function);
 	timeout->timeout.cb = uc_uloop_timeout_cb;
 	timeout->ucrun = vm_to_ucrun(vm);
@@ -235,8 +234,7 @@ uc_uloop_process(uc_vm_t *vm, size_t nargs)
 	}
 
 	/* add the uloop process */
-	process = malloc(sizeof(*process));
-	memset(process, 0, sizeof(*process));
+	process = calloc(1, sizeof(*process));
 	process->function = ucv_get(function);
 	process->process.cb = uc_uloop_process_cb;
 	process->ucrun = vm_to_ucrun(vm);
