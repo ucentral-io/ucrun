@@ -65,7 +65,7 @@ ucode_run(ucrun_ctx_t *ucrun)
 	}
 
 	/* call the garbage collector */
-	//ucv_gc(&ucrun->vm);
+	ucv_gc(&ucrun->vm);
 
 	return exit_code;
 }
@@ -438,6 +438,9 @@ ucode_deinit(ucrun_ctx_t *ucrun)
 
 	/* disconnect from ubus */
 	ubus_deinit(ucrun);
+
+	/* free program function */
+	ucv_put(&ucrun->prog->header);
 
 	/* free VM context */
 	uc_vm_free(&ucrun->vm);
