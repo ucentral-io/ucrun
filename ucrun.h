@@ -66,7 +66,7 @@ vm_to_ucrun(uc_vm_t *vm)
 	return container_of(vm, ucrun_ctx_t, vm);
 }
 
-extern int ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv);
+extern bool ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv, int *rc);
 extern void ucode_deinit(ucrun_ctx_t *ucrun);
 
 extern void ubus_init(ucrun_ctx_t *ucrun);

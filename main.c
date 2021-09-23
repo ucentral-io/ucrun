@@ -21,13 +21,17 @@ static ucrun_ctx_t ucrun;
 
 int main(int argc, const char **argv)
 {
+	int rc = 0;
+
 	if (argc < 2)
 		return -1;
 
 	uloop_init();
-	ucode_init(&ucrun, argc, argv);
-	uloop_run();
+
+	if (ucode_init(&ucrun, argc, argv, &rc))
+		uloop_run();
+
 	ucode_deinit(&ucrun);
 
-	return 0;
+	return rc;
 }

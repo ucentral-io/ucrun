@@ -22,52 +22,48 @@ static uc_parse_config_t config = {
 	.raw_mode = true,
 };
 
-static int
-ucode_run(ucrun_ctx_t *ucrun)
+static bool
+ucode_run(ucrun_ctx_t *ucrun, int *rc)
 {
-	int exit_code = 0;
+	uc_vm_status_t exec_status;
+	uc_value_t *retval;
+	bool rv = true;
 
 	/* increase the refcount of the function */
 	ucv_get(&ucrun->prog->header);
 
 	/* execute compiled program function */
-	uc_value_t *last_expression_result = NULL;
-	int return_code = uc_vm_execute(&ucrun->vm, ucrun->prog, &last_expression_result);
+	exec_status = uc_vm_execute(&ucrun->vm, ucrun->prog, &retval);
 
 	/* handle return status */
-	switch (return_code) {
+	switch (exec_status) {
 	case STATUS_OK:
-		exit_code = 0;
-
-		//char *s = ucv_to_string(&ucrun->vm, last_expression_result);
-		//printf("Program finished successfully.\n");
-		//printf("Function return value is %s\n", s);
 		break;
 
 	case STATUS_EXIT:
-		exit_code = (int)ucv_int64_get(last_expression_result);
-
-		printf("The invoked program called exit().\n");
-		printf("Exit code is %d\n", exit_code);
+		fprintf(stderr, "Program invoked exit() - terminating.\n");
+		*rc = (int)ucv_int64_get(retval);
+		rv = false;
 		break;
 
 	case ERROR_COMPILE:
-		exit_code = -1;
-
-		printf("A compilation error occurred while running the program\n");
+		fprintf(stderr, "Compilation error occurred - terminating.\n");
+		*rc = -1;
+		rv = false;
 		break;
 
 	case ERROR_RUNTIME:
-		exit_code = -2;
-
-		printf("A runtime error occurred while running the program\n");
+		fprintf(stderr, "Runtime error occurred - terminating.\n");
+		*rc = -2;
+		rv = false;
 		break;
 	}
 
 	/* call the garbage collector */
+	ucv_put(retval);
 	ucv_gc(&ucrun->vm);
 
-	return exit_code;
+	return rv;
 }
 
 static uc_function_t*
@@ -90,7 +86,9 @@ ucode_load(const char *file) {
 
 	/* check if compilation failed */
 	if (!progfunc)
-		fprintf(stderr, "Failed to compile program: %s\n", syntax_error);
+		fprintf(stderr, "Failed to compile %s: %s\n", file, syntax_error);
+
+	free(syntax_error);
 
 	return progfunc;
 }
@@ -343,10 +341,11 @@ ucode_init_ulog(ucrun_ctx_t *ucrun)
 	ulog_open(flags, LOG_DAEMON, ucrun->ulog_identity);
 }
 
-int
-ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv)
+bool
+ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv, int *rc)
 {
-	uc_value_t *ARGV, *start, *retval = NULL;
+	uc_value_t *ARGV, *start;
+	uc_exception_type_t ex;
 	int i;
 
 	/* setup the ucrun context */
@@ -359,8 +358,9 @@ ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv)
 	/* load our user code */
 	ucrun->prog = ucode_load(argv[1]);
 	if (!ucrun->prog) {
-		uc_vm_free(&ucrun->vm);
-		return -1;
+		*rc = -1;
+
+		return false;
 	}
 	ucrun->scope = uc_vm_scope_get(&ucrun->vm);
 
@@ -384,28 +384,43 @@ ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv)
 	ucv_object_add(ucrun->scope, "ARGV", ARGV);
 
 	/* load our user code */
-	ucode_run(ucrun);
+	if (!ucode_run(ucrun, rc))
+		return false;
 
 	/* enable ulog if requested */
 	ucode_init_ulog(ucrun);
 
 	/* everything is now setup, start the user code */
 	start = ucv_object_get(ucrun->scope, "start", NULL);
-	if (!ucv_is_callable(start))
-		return -1;
+
+	if (!ucv_is_callable(start)) {
+		fprintf(stderr, "Program start() function is %s - terminating.\n",
+			start ? "not callable" : "null");
+
+		*rc = -2;
+
+		return false;
+	}
 
 	/* push the start function to the stack */
 	uc_vm_stack_push(&ucrun->vm, ucv_get(start));
 
 	/* execute the start function */
-	if (!uc_vm_call(&ucrun->vm, false, 0))
-		retval = uc_vm_stack_pop(&ucrun->vm);
-	ucv_put(retval);
+	ex = uc_vm_call(&ucrun->vm, false, 0);
+
+	if (ex != EXCEPTION_NONE) {
+		fprintf(stderr, "Program start() function threw unhandled exception - terminating.\n");
+		*rc = -2;
+
+		return false;
+	}
+
+	ucv_put(uc_vm_stack_pop(&ucrun->vm));
 
 	/* spawn ubus if requested, this needs to happen after start() was called */
 	ucode_init_ubus(ucrun);
 
-	return 0;
+	return true;
 }
 
 void
@@ -413,20 +428,29 @@ ucode_deinit(ucrun_ctx_t *ucrun)
 {
 	ucrun_timeout_t *timeout, *t;
 	ucrun_process_t *process, *p;
+	uc_exception_type_t ex;
 	uc_value_t *stop;
 
-	/* tell the user code that we are shutting down */
-	stop = ucv_object_get(ucrun->scope, "stop", NULL);
-	if (ucv_is_callable(stop)) {
-		uc_value_t *retval = NULL;
+	/* skip stop function if we aborted due to an exception */
+	if (ucrun->vm.exception.type == EXCEPTION_NONE) {
+		/* tell the user code that we are shutting down */
+		stop = ucv_object_get(ucrun->scope, "stop", NULL);
 
-		/* push the stop function to the stack */
-		uc_vm_stack_push(&ucrun->vm, ucv_get(stop));
+		if (ucv_is_callable(stop)) {
+			/* push the stop function to the stack */
+			uc_vm_stack_push(&ucrun->vm, ucv_get(stop));
 
-		/* execute the stop function */
-		if (!uc_vm_call(&ucrun->vm, false, 0))
-			retval = uc_vm_stack_pop(&ucrun->vm);
-		ucv_put(retval);
+			/* execute the stop function */
+			ex = uc_vm_call(&ucrun->vm, false, 0);
+
+			if (ex != EXCEPTION_NONE)
+				fprintf(stderr, "Program stop() function threw unhandled exception - ignoring.\n");
+			else
+				ucv_put(uc_vm_stack_pop(&ucrun->vm));
+		}
+		else if (stop) {
+			fprintf(stderr, "Program stop() function is not callable - ignoring.\n");
+		}
 	}
 
 	/* start by killing all pending timers */
