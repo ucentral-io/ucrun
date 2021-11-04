@@ -211,14 +211,13 @@ ubus_init(ucrun_ctx_t *ucrun)
 	n_methods = ucv_object_length(methods);
 	ucrun->ubus_method = calloc(n_methods, sizeof(struct ubus_method));
 
-	n_methods = 0;
 	ucv_object_foreach(methods, key, val) {
 		if (!ucv_object_get(val, "cb", NULL))
 			continue;
 
 		ucrun->ubus_method[n].name = key;
 		ucrun->ubus_method[n].handler = ubus_ucode_cb;
-		n_methods++;
+		n++;
 	}
 
 	/* setup the ubus object */
