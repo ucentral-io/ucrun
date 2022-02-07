@@ -1,6 +1,6 @@
 #!./ucrun
 
-local n_runs = 0;
+let n_runs = 0;
 
 function timeout(priv) {
 	printf("timeout[%d]: %d - %s\n", n_runs, time(), priv);

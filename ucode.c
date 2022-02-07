@@ -57,9 +57,6 @@ ucode_run(ucrun_ctx_t *ucrun, int *rc)
 	uc_value_t *retval;
 	bool rv = true;
 
-	/* increase the refcount of the function */
-	ucv_get(&ucrun->prog->header);
-
 	/* execute compiled program function */
 	exec_status = uc_vm_execute(&ucrun->vm, ucrun->prog, &retval);
 
@@ -94,7 +91,7 @@ ucode_run(ucrun_ctx_t *ucrun, int *rc)
 	return rv;
 }
 
-static uc_function_t*
+static uc_program_t *
 ucode_load(const char *file) {
 	/* create a source buffer from the given input file */
 	uc_source_t *src = uc_source_new_file(file);
@@ -107,18 +104,18 @@ ucode_load(const char *file) {
 
 	/* compile source buffer into function */
 	char *syntax_error = NULL;
-	uc_function_t *progfunc = uc_compile(&config, src, &syntax_error);
+	uc_program_t *prog = uc_compile(&config, src, &syntax_error);
 
 	/* release source buffer */
 	uc_source_put(src);
 
 	/* check if compilation failed */
-	if (!progfunc)
+	if (!prog)
 		fprintf(stderr, "Failed to compile %s: %s\n", file, syntax_error);
 
 	free(syntax_error);
 
-	return progfunc;
+	return prog;
 }
 
 static void
@@ -497,8 +494,8 @@ ucode_deinit(ucrun_ctx_t *ucrun)
 	/* disconnect from ubus */
 	ubus_deinit(ucrun);
 
-	/* free program function */
-	ucv_put(&ucrun->prog->header);
+	/* free program */
+	uc_program_put(ucrun->prog);
 
 	/* free VM context */
 	uc_vm_free(&ucrun->vm);

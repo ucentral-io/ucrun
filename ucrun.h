@@ -30,7 +30,7 @@ typedef struct {
 
 	uc_vm_t vm;
 	uc_value_t *scope;
-	uc_function_t *prog;
+	uc_program_t *prog;
 
 	char *ulog_identity;
 
