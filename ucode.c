@@ -22,6 +22,34 @@ static uc_parse_config_t config = {
 	.raw_mode = true,
 };
 
+static const char *exception_types[] = {
+	[EXCEPTION_SYNTAX] = "Syntax error",
+	[EXCEPTION_RUNTIME] = "Runtime error",
+	[EXCEPTION_TYPE] = "Type error",
+	[EXCEPTION_REFERENCE] = "Reference error",
+	[EXCEPTION_USER] = "Error",
+	[EXCEPTION_EXIT] = "Exit"
+};
+
+static void
+ucode_handle_exception(uc_vm_t *vm, uc_exception_t *ex)
+{
+	const char *typename = "Error";
+	uc_value_t *ctx;
+
+	if (ex->type < ARRAY_SIZE(exception_types) && exception_types[ex->type])
+		typename = exception_types[ex->type];
+
+	fprintf(stderr, "%s: %s\n", typename, ex->message);
+
+	ctx = ucv_object_get(ucv_array_get(ex->stacktrace, 0), "context", NULL);
+
+	if (ctx)
+		fprintf(stderr, "%s\n", ucv_string_get(ctx));
+
+	fprintf(stderr, "\n");
+}
+
 static bool
 ucode_run(ucrun_ctx_t *ucrun, int *rc)
 {
@@ -354,6 +382,7 @@ ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv, int *rc)
 
 	/* initialize VM context */
 	uc_vm_init(&ucrun->vm, &config);
+	uc_vm_exception_handler_set(&ucrun->vm, ucode_handle_exception);
 
 	/* load our user code */
 	ucrun->prog = ucode_load(argv[1]);
