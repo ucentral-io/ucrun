@@ -43,10 +43,10 @@ global.ubus = {
 global.start = function() {
 	printf("%s\n", ARGV);
 
-	ulog_info("info\n");
-	ulog_note("note\n");
-	ulog_warn("warn\n");
-	ulog_err("err\n");
+	ulog_info("info: %08d\n", 123);
+	ulog_note("note: [%8s]\n", "abc");
+	ulog_warn("warn: %c\n", 64);
+	ulog_err("err: %.3f\n", 1.0/3.0);
 
 	uloop_timeout(timeout, 1000, { private: "data" });
 	uloop_process(process, [ "sleep", "10" ], { sleep: 10 });

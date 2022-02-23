@@ -281,23 +281,27 @@ ucode_init_ubus(ucrun_ctx_t *ucrun)
 	ubus_init(ucrun);
 }
 
+static uc_cfunction_t *fmtfn;
+
 static uc_value_t *
 uc_ulog(uc_vm_t *vm, size_t nargs, int severity)
 {
-	uc_value_t *message = uc_fn_arg(0);
-	char *string;
+	uc_value_t *res;
 
-	if (!message)
+	if (!fmtfn) {
+		fmtfn = (uc_cfunction_t *)ucv_object_get(uc_vm_scope_get(vm), "sprintf", NULL);
+
+		if (!fmtfn || fmtfn->header.type != UC_CFUNCTION)
+			return ucv_int64_new(-1);
+	}
+
+	res = fmtfn->cfn(vm, nargs);
+
+	if (!res)
 		return ucv_int64_new(-1);
 
-	if (ucv_type(message) == UC_STRING) {
-		ulog(severity, "%s", ucv_string_get(message));
-	}
-	else {
-		string = ucv_to_string(vm, message);
-		ulog(severity, "%s", string);
-		free(string);
-	}
+	ulog(severity, "%s", ucv_string_get(res));
+	ucv_put(res);
 
 	return ucv_int64_new(0);
 }
