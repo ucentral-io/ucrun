@@ -281,7 +281,7 @@ ucode_init_ubus(ucrun_ctx_t *ucrun)
 	ubus_init(ucrun);
 }
 
-static uc_cfunction_t *fmtfn;
+static uc_cfn_ptr_t fmtfn;
 
 static uc_value_t *
 uc_ulog(uc_vm_t *vm, size_t nargs, int severity)
@@ -289,13 +289,13 @@ uc_ulog(uc_vm_t *vm, size_t nargs, int severity)
 	uc_value_t *res;
 
 	if (!fmtfn) {
-		fmtfn = (uc_cfunction_t *)ucv_object_get(uc_vm_scope_get(vm), "sprintf", NULL);
+		fmtfn = uc_stdlib_function("sprintf");
 
-		if (!fmtfn || fmtfn->header.type != UC_CFUNCTION)
+		if (!fmtfn)
 			return ucv_int64_new(-1);
 	}
 
-	res = fmtfn->cfn(vm, nargs);
+	res = fmtfn(vm, nargs);
 
 	if (!res)
 		return ucv_int64_new(-1);
