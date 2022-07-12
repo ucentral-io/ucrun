@@ -20,6 +20,7 @@
 static uc_parse_config_t config = {
 	.strict_declarations = true,
 	.raw_mode = true,
+	.lstrip_blocks = true,
 };
 
 static const char *exception_types[] = {
