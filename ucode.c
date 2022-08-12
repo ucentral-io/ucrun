@@ -385,6 +385,7 @@ ucode_init(ucrun_ctx_t *ucrun, int argc, const char **argv, int *rc)
 	/* initialize VM context */
 	uc_vm_init(&ucrun->vm, &config);
 	uc_vm_exception_handler_set(&ucrun->vm, ucode_handle_exception);
+	uc_search_path_init(&config.module_search_path);
 
 	/* load our user code */
 	ucrun->prog = ucode_load(argv[1]);
